@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>My Leads · On Track</title>
+<link rel="stylesheet" href="/ui.css">
+<style>
+  .wrap { position: relative; z-index: 1; max-width: 720px; margin: 0 auto; padding: 20px 16px 60px; }
+  .hero { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+  .hero h1 { font-size: 22px; } .hero p { margin: 2px 0 0; color: var(--mute); }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
+  .stats .card { padding: 12px 8px; text-align: center; } .stats b { display: block; font-size: 22px; letter-spacing: -.02em; } .stats span { font-size: 11.5px; color: var(--mute); }
+  .lead { padding: 16px; display: grid; gap: 12px; margin-bottom: 12px; animation: in .35s ease both; }
+  .lh { display: flex; align-items: center; gap: 10px; } .lh b { font-size: 15px; } .lh .sp { flex: 1; } .lh small { color: var(--mute); }
+  .seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; background: var(--panel2); padding: 4px; border-radius: 13px; }
+  .seg button { border: 0; background: transparent; padding: 8px 4px; border-radius: 10px; font-weight: 600; font-size: 12.5px; color: var(--mute); text-transform: capitalize; transition: .15s; }
+  .seg button.on.new { background: var(--info); color: #fff; } .seg button.on.contacted { background: var(--warn); color: #fff; } .seg button.on.won { background: var(--ok); color: #fff; } .seg button.on.lost { background: var(--bad); color: #fff; }
+  .fields { display: grid; grid-template-columns: 1fr; gap: 8px; }
+  .wa { background: #25d366; color: #06371a; border: 0; font-weight: 650; }
+  @media (max-width: 460px) { .fields { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero"><span class="av" id="av">–</span><div><h1 id="who">My Leads</h1><p>New customers appear here and in your WhatsApp.</p></div></div>
+  <div class="stats" id="stats"></div>
+  <div id="list"></div>
+</div>
+<div id="toasts"></div>
+<script>
+const token = location.pathname.split('/').pop();
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const when = (t) => new Date(t.replace(' ', 'T') + 'Z').toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+const toast = (m) => { const t = document.createElement('div'); t.className = 'toast'; t.textContent = m; $('#toasts').append(t); setTimeout(() => t.remove(), 2200); };
+const save = (id, body) => fetch(`/api/agent/${token}/clicks/${id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then((r) => { if (!r.ok) throw 0; });
+const S = ['new', 'contacted', 'won', 'lost'];
+
+function render(d) {
+  $('#who').textContent = d.name; $('#av').textContent = d.name.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase(); $('#av').className = 'av c' + (d.name.length % 5);
+  const n = (s) => d.clicks.filter((c) => c.status === s).length;
+  $('#stats').innerHTML = [['Total', d.clicks.length], ['New', n('new')], ['Won', n('won')], ['Lost', n('lost')]].map(([l, v]) => `<div class="card"><b class="num">${v}</b><span>${l}</span></div>`).join('');
+  if (document.activeElement && $('#list').contains(document.activeElement)) return; // don't wipe what is being typed
+  $('#list').innerHTML = d.clicks.map((c) => `<div class="card lead" data-id="${c.id}">
+    <div class="lh"><b>Ref #${c.id}</b>${c.customer_phone ? `<small class="num">+${esc(c.customer_phone)}</small>` : ''}<span class="sp"></span><small>${when(c.created_at)}</small></div>
+    <div class="seg">${S.map((s) => `<button class="${s} ${s === c.status ? 'on' : ''}" data-s="${s}">${s}</button>`).join('')}</div>
+    <div class="fields"><input data-f="customer" placeholder="Customer name" value="${esc(c.customer || c.customer_name)}"><input data-f="note" placeholder="Add a note"></div>
+    ${c.customer_phone ? `<a class="btn wa" href="https://wa.me/${esc(c.customer_phone)}" target="_blank" rel="noopener" style="justify-content:center;text-decoration:none">Open WhatsApp chat</a>` : ''}</div>`).join('')
+    || '<div class="card"><div class="empty"><b>No leads yet</b>New customers will show up here automatically.</div></div>';
+  d.clicks.forEach((c) => { const el = $(`.lead[data-id="${c.id}"] [data-f=note]`); if (el) el.value = c.note || ''; });
+}
+async function load() {
+  const r = await fetch('/api/agent/' + token);
+  if (!r.ok) { $('#list').innerHTML = '<div class="card"><div class="empty"><b>Link not valid</b>Ask your manager for a new link.</div></div>'; return; }
+  render(await r.json());
+}
+$('#list').addEventListener('click', async (e) => { const b = e.target.closest('.seg button'); if (!b) return; await save(b.closest('.lead').dataset.id, { status: b.dataset.s }).then(() => toast('Status updated'), () => toast('Could not save')); load(); });
+$('#list').addEventListener('change', (e) => { const f = e.target.dataset.f; if (f) save(e.target.closest('.lead').dataset.id, { [f]: e.target.value }).then(() => toast('Saved'), () => toast('Could not save')); });
+load(); setInterval(load, 10000);
+</script>
+</body>
+</html>

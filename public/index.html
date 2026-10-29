@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>On Track Command Center</title>
+<link rel="stylesheet" href="/ui.css">
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand">
+      <div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-5.2-7-11a7 7 0 0 1 14 0c0 5.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.6"/></svg></div>
+      <div><b>On Track</b><span>Lead Command Center</span></div>
+    </div>
+    <nav class="nav" id="nav">
+      <a href="#overview" data-r="overview"><span data-i="grid"></span>Overview</a>
+      <a href="#leads" data-r="leads"><span data-i="users"></span>Leads<em class="badge" id="newBadge" hidden>0</em></a>
+      <a href="#team" data-r="team"><span data-i="team"></span>Sales Team</a>
+    </nav>
+    <div class="foot"><b>Ad destination link</b><span id="footLink" style="word-break:break-all">&nbsp;</span>
+      <button class="btn sm" id="copyAd" style="margin-top:10px;width:100%;justify-content:center"><span data-i="copy"></span>Copy link</button></div>
+  </aside>
+
+  <main class="main">
+    <div class="top">
+      <h1 id="title">Overview<small id="subtitle"></small></h1>
+      <span class="live"><span class="dot" id="dot"></span><span id="liveText">Connecting</span></span>
+      <button class="btn icon-btn" id="theme" title="Toggle theme"><span data-i="moon"></span></button>
+      <button class="btn primary" id="addTop" hidden><span data-i="plus"></span>Add member</button>
+    </div>
+    <div id="view"></div>
+  </main>
+</div>
+
+<dialog id="addDlg"><div class="mb"><h3>Add sales member</h3><p>Every ad click is routed to the next active member in turn.</p>
+  <form id="addForm"><input id="aName" placeholder="Full name" required><input id="aPhone" placeholder="WhatsApp number, e.g. 0300 1234567" required>
+    <div class="row"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary">Add member</button></div></form></div></dialog>
+
+<dialog id="qrDlg"><div class="mb" style="text-align:center"><h3 id="qrTitle">Link WhatsApp</h3>
+  <div class="qrbox" id="qrBox"><div class="spin"></div></div>
+  <ol class="steps" style="text-align:left"><li>Open WhatsApp on the member's phone</li><li>Go to <b>Settings → Linked devices</b></li><li>Tap <b>Link a device</b> and scan this code</li></ol>
+  <div class="row" style="display:flex;justify-content:center"><button class="btn" id="qrClose">Close</button></div></div></dialog>
+
+<dialog id="cfmDlg"><div class="mb"><h3 id="cfmTitle"></h3><p id="cfmText"></p>
+  <div class="row"><button class="btn" data-close>Cancel</button><button class="btn danger" id="cfmOk">Confirm</button></div></div></dialog>
+
+<div id="toasts"></div>
+
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const I = {
+  grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
+  team: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+  copy: '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+  moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>', plus: '<path d="M12 5v14M5 12h14"/>',
+  click: '<path d="M9 9l5 12 1.8-5.2L21 14 9 9z"/><path d="M7.2 2.2l1 3.7M2.2 7.2l3.7 1M5 5L2.5 2.5"/>',
+  chat: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  check: '<path d="M20 6L9 17l-5-5"/>', link: '<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>',
+  x: '<path d="M18 6L6 18M6 6l12 12"/>', trend: '<path d="M22 7l-8.5 8.5-5-5L2 17"/><path d="M16 7h6v6"/>',
+  target: '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>', phone: '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/>',
+  download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>', inbox: '<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5.1L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.7 4H7.3a2 2 0 0 0-1.8 1.1z"/>',
+};
+const icon = (n) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${I[n] || ''}</svg>`;
+const paintIcons = (root = document) => root.querySelectorAll('[data-i]').forEach((el) => { el.innerHTML = icon(el.dataset.i); el.style.display = 'inline-flex'; el.style.width = el.style.height = '18px'; });
+
+const utc = (t) => new Date(String(t).replace(' ', 'T') + 'Z');
+const ago = (t) => { const s = (Date.now() - utc(t)) / 1000; if (s < 45) return 'just now'; if (s < 3600) return Math.round(s / 60) + 'm ago'; if (s < 86400) return Math.round(s / 3600) + 'h ago'; return Math.round(s / 86400) + 'd ago'; };
+const when = (t) => utc(t).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+const api = async (u, body) => { const r = await fetch(u, body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Request failed'); return r.status === 204 ? null : r.json(); };
+const toast = (m) => { const t = document.createElement('div'); t.className = 'toast'; t.textContent = m; $('#toasts').append(t); setTimeout(() => t.remove(), 3200); };
+const initials = (n) => String(n || '?').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+const avatar = (id, name, sm) => `<span class="av ${sm ? 'sm' : ''} c${id % 5}">${esc(initials(name))}</span>`;
+const WA = { connected: 'Connected', qr: 'Waiting for scan', connecting: 'Connecting', disconnected: 'Not linked' };
+
+// count-up animation
+function countTo(el, to) {
+  const from = Number(el.dataset.v ?? 0); el.dataset.v = to; if (from === to) { el.textContent = to.toLocaleString(); return; }
+  const t0 = performance.now();
+  (function step(t) { const p = Math.min(1, (t - t0) / 600), e = 1 - Math.pow(1 - p, 3); el.textContent = Math.round(from + (to - from) * e).toLocaleString(); if (p < 1) requestAnimationFrame(step); })(t0);
+}
+const delta = (a, b) => { if (!b) return a ? '<span class="delta up">New</span>' : '<span class="delta flat">–</span>'; const p = Math.round(((a - b) / b) * 100); return `<span class="delta ${p > 0 ? 'up' : p < 0 ? 'down' : 'flat'}">${p > 0 ? '+' : ''}${p}%</span>`; };
+
+/* ---------------- Overview ---------------- */
+const skeleton = '<div class="grid kpis">' + '<div class="card kpi"><div class="skel" style="width:50%"></div><div class="skel" style="height:34px;margin:14px 0 8px;width:40%"></div><div class="skel" style="width:70%"></div></div>'.repeat(4) + '</div>';
+
+function chartSvg(daily) {
+  const W = 700, H = 230, pl = 28, pb = 26, pt = 12, max = Math.max(4, ...daily.map((d) => d.count)), step = Math.ceil(max / 4), top = step * 4;
+  const bw = (W - pl) / daily.length, ch = H - pb - pt;
+  let s = `<svg viewBox="0 0 ${W} ${H}"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--brand)"/><stop offset="1" stop-color="var(--brand2)"/></linearGradient></defs>`;
+  for (let i = 0; i <= 4; i++) { const y = pt + ch - (ch * i) / 4; s += `<line class="gridline" x1="${pl}" x2="${W}" y1="${y}" y2="${y}"/><text class="axis" x="0" y="${y + 4}">${step * i}</text>`; }
+  daily.forEach((d, i) => {
+    const h = (d.count / top) * ch, x = pl + i * bw + bw * 0.18, w = bw * 0.64;
+    s += `<rect class="bar" data-tip="${esc(new Date(d.day + 'T00:00').toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' }))}: ${d.count} lead${d.count === 1 ? '' : 's'}" x="${x}" y="${pt + ch - Math.max(h, d.count ? 3 : 1.5)}" width="${w}" height="${Math.max(h, d.count ? 3 : 1.5)}" rx="6"/>`;
+    if (i % 2 === (daily.length - 1) % 2) s += `<text class="axis" x="${x + w / 2}" y="${H - 6}" text-anchor="middle">${new Date(d.day + 'T00:00').toLocaleDateString([], { day: 'numeric', month: 'short' })}</text>`;
+  });
+  return s + '</svg><div class="tip" id="tip"></div>';
+}
+
+function feedItem(e) {
+  let c = '', ic = 'click', t = 'New lead routed', d = e.detail;
+  if (e.type === 'lead_message') { ic = 'chat'; c = 'ok'; t = 'Customer messaged'; d = (e.phone ? '+' + e.phone + ' · ' : '') + e.detail; }
+  else if (e.type === 'status') { ic = 'check'; t = 'Status updated'; c = /won/.test(e.detail) ? 'ok' : /lost/.test(e.detail) ? 'bad' : 'warn'; }
+  else if (e.type === 'wa_connected') { ic = 'link'; c = 'ok'; t = 'WhatsApp linked'; d = '+' + (e.phone || ''); }
+  else if (e.type === 'wa_logged_out') { ic = 'x'; c = 'bad'; t = 'WhatsApp unlinked'; d = e.detail; }
+  return `<div class="fi"><span class="e ${c}">${icon(ic)}</span><div><p>${t}</p><small>${esc(d)} · ${ago(e.created_at)}</small></div></div>`;
+}
+
+let overviewBuilt = false;
+async function overview() {
+  const d = await api('/api/overview'), k = d.kpis;
+  $('#subtitle').textContent = 'Live performance of your WhatsApp ad funnel';
+  const reached = k.contacted + k.won + k.lost, rate = k.total ? Math.round((reached / k.total) * 100) : 0, win = k.total ? Math.round((k.won / k.total) * 100) : 0;
+  if (!overviewBuilt) {
+    $('#view').innerHTML = `
+    <div class="grid kpis">
+      ${[['today', 'Leads today', 'target'], ['week', 'Last 7 days', 'trend'], ['reached', 'Customers reached', 'chat'], ['won', 'Deals won', 'check']].map(([id, l, ic]) =>
+        `<div class="card kpi"><div class="lbl"><span class="ico">${icon(ic)}</span>${l}</div><div class="val num" id="k-${id}">0</div><div class="sub" id="s-${id}"></div></div>`).join('')}
+    </div>
+    <div class="grid two">
+      <div class="card"><header><h2>Leads per day</h2><span>Last 14 days</span></header><div class="chart" id="chart"></div></div>
+      <div class="card"><header><h2>Funnel</h2></header><div class="pad funnel" id="funnel"></div></div>
+    </div>
+    <div class="grid two even">
+      <div class="card"><header><h2>Team leaderboard</h2><span>All time</span></header><div class="pad board" id="board"></div></div>
+      <div class="card"><header><h2>Live activity</h2><span><span class="dot on" style="display:inline-block;margin-right:6px"></span>realtime</span></header><div class="feed" id="feed"></div></div>
+    </div>`;
+    overviewBuilt = true;
+  }
+  countTo($('#k-today'), k.today); countTo($('#k-week'), k.week); countTo($('#k-reached'), reached); countTo($('#k-won'), k.won);
+  $('#s-today').innerHTML = `${delta(k.today, k.yesterday)} vs yesterday (${k.yesterday})`;
+  $('#s-week').innerHTML = `${k.total.toLocaleString()} all time`;
+  $('#s-reached').innerHTML = `<span class="delta flat">${rate}%</span> of all leads`;
+  $('#s-won').innerHTML = `<span class="delta ${win ? 'up' : 'flat'}">${win}%</span> conversion`;
+  $('#chart').innerHTML = chartSvg(d.daily);
+  const tip = $('#tip'), chart = $('#chart');
+  chart.querySelectorAll('.bar').forEach((b) => {
+    b.onmouseenter = () => { const r = b.getBoundingClientRect(), c = chart.getBoundingClientRect(); tip.textContent = b.dataset.tip; tip.style.left = r.left - c.left + r.width / 2 + 'px'; tip.style.top = r.top - c.top + 'px'; tip.style.opacity = 1; };
+    b.onmouseleave = () => { tip.style.opacity = 0; };
+  });
+  const pct = (n, t) => (t ? (n / t) * 100 : 0);
+  $('#funnel').innerHTML = [['Ad clicks', k.total, 100, ''], ['Customer reached', reached, pct(reached, k.total), ''], ['Deals won', k.won, pct(k.won, k.total), '']]
+    .map(([l, n, p]) => `<div class="fr"><div class="meta"><span>${l}</span><b class="num">${n.toLocaleString()}</b></div><div class="track"><div class="fill" style="width:${p}%"></div></div></div>`).join('')
+    + `<div class="fr" style="margin-top:6px"><div class="meta"><span>Status mix</span><b class="num">${k.total}</b></div><div class="track" title="New / Contacted / Won / Lost">${['new', 'contacted', 'won', 'lost'].map((s) => `<div class="seg-${s}" style="width:${pct(k[s], k.total)}%"></div>`).join('')}</div>
+      <div class="meta" style="margin:8px 0 0;gap:10px;flex-wrap:wrap;justify-content:flex-start">${['new', 'contacted', 'won', 'lost'].map((s) => `<span class="pill ${s}">${s} ${k[s]}</span>`).join('')}</div></div>`;
+  const maxT = Math.max(1, ...d.agents.map((a) => a.total));
+  $('#board').innerHTML = d.agents.length ? [...d.agents].sort((a, b) => b.total - a.total).map((a) => `<div class="brow">${avatar(a.id, a.name)}
+      <div><div class="who">${esc(a.name)} ${a.active ? '' : '<span class="pill paused">paused</span>'}<small>${a.today || 0} today · ${a.won || 0} won</small></div>
+      <div class="track" style="margin-top:8px"><div class="fill" style="width:${(a.total / maxT) * 100}%"></div></div></div><div class="tot num">${a.total}</div></div>`).join('')
+    : `<div class="empty">${icon('team')}<b>No team members yet</b>Add your sales team to start routing leads.<br><br><a class="btn primary" href="#team">Add members</a></div>`;
+  $('#feed').innerHTML = d.feed.length ? d.feed.map(feedItem).join('') : `<div class="empty">${icon('inbox')}<b>Waiting for the first lead</b>Activity appears here the moment someone clicks your ad.</div>`;
+  setBadge(k.new);
+}
+
+/* ---------------- Leads ---------------- */
+let lf = { status: '', agent: '', q: '' }, agentsCache = [], leadsData = [];
+async function leads(fresh) {
+  if (fresh || !$('#lt')) {
+    agentsCache = (await api('/api/team')).agents;
+    $('#subtitle').textContent = 'Every ad click, who got it, and what happened next';
+    $('#view').innerHTML = `<div class="card"><div class="toolbar"><input type="search" id="q" placeholder="Search name, number or Ref #" value="${esc(lf.q)}">
+      <div class="chips" id="chips">${['', 'new', 'contacted', 'won', 'lost'].map((s) => `<button class="chip ${lf.status === s ? 'on' : ''}" data-s="${s}">${s || 'All'}</button>`).join('')}</div>
+      <select id="ag"><option value="">All members</option>${agentsCache.map((a) => `<option value="${a.id}" ${String(lf.agent) === String(a.id) ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}</select>
+      <button class="btn" id="csv"><span data-i="download"></span>Export CSV</button></div><div class="tw" id="lt"></div></div>`;
+    paintIcons($('#view'));
+    $('#q').oninput = debounce((e) => { lf.q = e.target.value.trim(); leads(); }, 250);
+    $('#ag').onchange = (e) => { lf.agent = e.target.value; leads(); };
+    $('#chips').onclick = (e) => { const b = e.target.closest('.chip'); if (!b) return; lf.status = b.dataset.s; $('#chips').querySelectorAll('.chip').forEach((c) => c.classList.toggle('on', c === b)); leads(); };
+    $('#csv').onclick = exportCsv;
+  }
+  const qs = new URLSearchParams(Object.fromEntries(Object.entries(lf).filter(([, v]) => v))).toString();
+  leadsData = await api('/api/leads?' + qs);
+  $('#lt').innerHTML = leadsData.length ? `<table><thead><tr><th>Ref</th><th>Customer</th><th>Number</th><th>Assigned to</th><th>Status</th><th>Note</th><th>Received</th></tr></thead><tbody>${leadsData.map((l) => `<tr>
+      <td class="num"><b>#${l.id}</b></td><td>${esc(l.customer) || '<span class="mute">Not captured</span>'}</td>
+      <td class="num">${l.customer_phone ? '+' + esc(l.customer_phone) : '<span class="mute">–</span>'}</td>
+      <td><span class="ag">${avatar(l.agent_id || 0, l.agent, true)}${esc(l.agent)}</span></td><td><span class="pill ${l.status}">${l.status}</span></td>
+      <td class="mute" style="max-width:240px;overflow:hidden;text-overflow:ellipsis">${esc(l.note) || '–'}</td><td class="mute" title="${when(l.created_at)}">${ago(l.created_at)}</td></tr>`).join('')}</tbody></table>`
+    : `<div class="empty">${icon('inbox')}<b>No leads found</b>${lf.q || lf.status || lf.agent ? 'Try clearing the filters.' : 'They appear here as soon as your ad gets clicks.'}</div>`;
+  const ov = await api('/api/overview'); setBadge(ov.kpis.new);
+}
+function exportCsv() {
+  const rows = [['Ref', 'Customer', 'Number', 'Assigned to', 'Status', 'Note', 'Received (UTC)'], ...leadsData.map((l) => [l.id, l.customer || '', l.customer_phone || '', l.agent || '', l.status, l.note || '', l.created_at])];
+  const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'on-track-leads.csv'; a.click();
+}
+
+/* ---------------- Team ---------------- */
+async function team() {
+  const d = await api('/api/team');
+  $('#subtitle').textContent = 'Members, WhatsApp links and routing';
+  $('#footLink').textContent = d.adLink; window.__adLink = d.adLink;
+  $('#view').innerHTML = d.agents.length ? `<div class="grid team">${d.agents.map((a) => `<div class="card member ${a.active ? '' : 'off'}">
+      <div class="mh">${avatar(a.id, a.name)}<div class="t"><b>${esc(a.name)}</b><span>+${esc(a.phone)}</span></div>
+        <span class="pill ${a.active ? a.wa.state : 'paused'}">${a.active ? WA[a.wa.state] : 'Paused'}</span></div>
+      <div class="mini"><div><b class="num">${a.total}</b><span>Total</span></div><div><b class="num">${a.new_ || 0}</b><span>New</span></div><div><b class="num">${a.won || 0}</b><span>Won</span></div><div><b class="num">${a.lost || 0}</b><span>Lost</span></div></div>
+      <div class="acts">
+        ${a.wa.state === 'disconnected' ? `<button class="btn sm primary" data-a="link" data-id="${a.id}" data-n="${esc(a.name)}"><span data-i="link"></span>Link WhatsApp</button>` : `<button class="btn sm danger" data-a="unlink" data-id="${a.id}" data-n="${esc(a.name)}">Disconnect</button>`}
+        <button class="btn sm" data-a="pause" data-id="${a.id}" data-v="${a.active ? 0 : 1}">${a.active ? 'Pause leads' : 'Resume leads'}</button>
+        <button class="btn sm" data-a="copy" data-l="${esc(a.link)}"><span data-i="copy"></span>Member link</button></div></div>`).join('')}</div>`
+    : `<div class="card"><div class="empty">${icon('team')}<b>Build your sales team</b>Add the people who will receive leads on WhatsApp.<br><br><button class="btn primary" onclick="openAdd()">Add first member</button></div></div>`;
+  paintIcons($('#view'));
+}
+$('#view').addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-a]'); if (!b) return; const id = b.dataset.id;
+  try {
+    if (b.dataset.a === 'copy') { await navigator.clipboard.writeText(b.dataset.l); toast('Member link copied'); }
+    if (b.dataset.a === 'pause') { await api(`/api/team/${id}/active`, { active: b.dataset.v === '1' }); toast(b.dataset.v === '1' ? 'Leads resumed' : 'Leads paused'); team(); }
+    if (b.dataset.a === 'link') showQr(id, b.dataset.n);
+    if (b.dataset.a === 'unlink') confirmBox('Disconnect WhatsApp?', `${b.dataset.n} will be unlinked from this dashboard and will need to scan a new QR code to reconnect.`, async () => { await api(`/api/team/${id}/disconnect`, {}); toast('WhatsApp disconnected'); team(); });
+  } catch (err) { toast(err.message); }
+});
+
+let qrTimer;
+async function showQr(id, name) {
+  $('#qrTitle').textContent = `Link ${name}'s WhatsApp`; $('#qrBox').innerHTML = '<div class="spin"></div>'; $('#qrDlg').showModal();
+  await api(`/api/team/${id}/connect`, {});
+  const tick = async () => {
+    const r = await api(`/api/team/${id}/qr`);
+    if (r.state === 'connected') { clearInterval(qrTimer); $('#qrDlg').close(); toast('WhatsApp linked successfully'); team(); return; }
+    if (r.qr) $('#qrBox').innerHTML = `<img alt="QR code" src="${r.qr}">`;
+  };
+  clearInterval(qrTimer); tick(); qrTimer = setInterval(tick, 2500);
+}
+$('#qrClose').onclick = () => { clearInterval(qrTimer); $('#qrDlg').close(); route(); };
+$('#qrDlg').addEventListener('close', () => clearInterval(qrTimer));
+
+function confirmBox(title, text, ok) { $('#cfmTitle').textContent = title; $('#cfmText').textContent = text; $('#cfmDlg').showModal(); $('#cfmOk').onclick = async () => { $('#cfmDlg').close(); try { await ok(); } catch (e) { toast(e.message); } }; }
+function openAdd() { $('#addDlg').showModal(); $('#aName').focus(); }
+$('#addTop').onclick = openAdd;
+document.querySelectorAll('[data-close]').forEach((b) => (b.onclick = () => b.closest('dialog').close()));
+$('#addForm').onsubmit = async (e) => {
+  e.preventDefault();
+  try { await api('/api/team', { name: $('#aName').value, phone: $('#aPhone').value }); $('#addDlg').close(); $('#addForm').reset(); toast('Member added'); route(); } catch (err) { toast(err.message); }
+};
+
+/* ---------------- shell ---------------- */
+const debounce = (f, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => f(...a), ms); }; };
+const setBadge = (n) => { const b = $('#newBadge'); b.hidden = !n; b.textContent = n; };
+const routes = { overview: ['Overview', overview], leads: ['Leads', leads], team: ['Sales Team', team] };
+let current = '', timer;
+async function route(fresh) {
+  const r = (location.hash.slice(1) in routes ? location.hash.slice(1) : 'overview');
+  if (r !== current) { current = r; overviewBuilt = false; $('#view').innerHTML = skeleton; fresh = true; }
+  $('#title').firstChild.textContent = routes[r][0];
+  document.querySelectorAll('#nav a').forEach((a) => a.classList.toggle('on', a.dataset.r === r));
+  $('#addTop').hidden = r !== 'team';
+  try { await routes[r][1](fresh); live(true); } catch (e) { live(false); }
+  if (!window.__adLink) api('/api/team').then((d) => { window.__adLink = d.adLink; $('#footLink').textContent = d.adLink; }).catch(() => {});
+}
+function live(on) { $('#dot').classList.toggle('on', on); $('#liveText').textContent = on ? 'Live' : 'Reconnecting'; }
+window.addEventListener('hashchange', () => route(true));
+$('#copyAd').onclick = async () => { if (window.__adLink) { await navigator.clipboard.writeText(window.__adLink); toast('Ad link copied'); } };
+$('#theme').onclick = () => {
+  const dark = document.documentElement.dataset.theme ? document.documentElement.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  document.documentElement.dataset.theme = dark ? 'light' : 'dark'; try { localStorage.setItem('theme', dark ? 'light' : 'dark'); } catch {}
+};
+try { const t = localStorage.getItem('theme'); if (t) document.documentElement.dataset.theme = t; } catch {}
+paintIcons(); route(true);
+setInterval(() => { if (!document.hidden && !$('dialog[open]')) route(); }, 5000);
+</script>
+</body>
+</html>
