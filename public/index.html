@@ -30,12 +30,14 @@
       <button class="btn primary" id="addTop" hidden><span data-i="plus"></span>Add member</button>
     </div>
     <div id="view"></div>
+    <p class="disclaimer" style="margin:28px 4px 10px;text-align:center;font-size:12px;line-height:1.7;color:var(--mute,#8a97a8);opacity:.85">
+      Privacy note: This system never stores WhatsApp chats or receives any conversation data. Linking a member's WhatsApp is used only to recognise which customer contacted them, so that every new lead reaches the sales team. All conversations stay on each member's own phone.</p>
   </main>
 </div>
 
-<dialog id="addDlg"><div class="mb"><h3>Add sales member</h3><p>Every ad click is routed to the next active member in turn.</p>
+<dialog id="addDlg"><div class="mb"><h3 id="addTitle">Add sales member</h3><p>Every ad click is routed to the next active member in turn.</p>
   <form id="addForm"><input id="aName" placeholder="Full name" required><input id="aPhone" placeholder="WhatsApp number, e.g. 0300 1234567" required>
-    <div class="row"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary">Add member</button></div></form></div></dialog>
+    <div class="row"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary" id="addSubmit">Add member</button></div></form></div></dialog>
 
 <dialog id="qrDlg"><div class="mb" style="text-align:center"><h3 id="qrTitle">Link WhatsApp</h3>
   <div class="qrbox" id="qrBox"><div class="spin"></div></div>
@@ -199,6 +201,7 @@ async function team() {
         ${a.wa.state === 'disconnected' ? `<button class="btn sm primary" data-a="link" data-id="${a.id}" data-n="${esc(a.name)}"><span data-i="link"></span>Link WhatsApp</button>` : `<button class="btn sm danger" data-a="unlink" data-id="${a.id}" data-n="${esc(a.name)}">Disconnect</button>`}
         <button class="btn sm" data-a="pause" data-id="${a.id}" data-v="${a.active ? 0 : 1}">${a.active ? 'Pause leads' : 'Resume leads'}</button>
         <button class="btn sm" data-a="copy" data-l="${esc(a.link)}"><span data-i="copy"></span>Member link</button>
+        <button class="btn sm" data-a="edit" data-id="${a.id}" data-n="${esc(a.name)}" data-p="${esc(a.phone)}">Edit</button>
         <button class="btn sm danger" data-a="remove" data-id="${a.id}" data-n="${esc(a.name)}">Remove</button></div></div>`).join('')}</div>`
     : `<div class="card"><div class="empty">${icon('team')}<b>Build your sales team</b>Add the people who will receive leads on WhatsApp.<br><br><button class="btn primary" onclick="openAdd()">Add first member</button></div></div>`;
   paintIcons($('#view'));
@@ -211,6 +214,7 @@ $('#view').addEventListener('click', async (e) => {
     if (b.dataset.a === 'link') showQr(id, b.dataset.n);
     if (b.dataset.a === 'unlink') confirmBox('Disconnect WhatsApp?', `${b.dataset.n} will be unlinked from this dashboard and will need to scan a new QR code to reconnect.`, async () => { await api(`/api/team/${id}/disconnect`, {}); toast('WhatsApp disconnected'); team(); });
     if (b.dataset.a === 'remove') confirmBox('Remove this member?', `${b.dataset.n} will be removed from the team and unlinked from WhatsApp. Their past leads stay in the Leads list.`, async () => { await api(`/api/team/${id}`, {}, 'DELETE'); toast('Member removed'); team(); });
+    if (b.dataset.a === 'edit') openAdd(id, b.dataset.n, b.dataset.p);
   } catch (err) { toast(err.message); }
 });
 
@@ -229,12 +233,23 @@ $('#qrClose').onclick = () => { clearInterval(qrTimer); $('#qrDlg').close(); rou
 $('#qrDlg').addEventListener('close', () => clearInterval(qrTimer));
 
 function confirmBox(title, text, ok) { $('#cfmTitle').textContent = title; $('#cfmText').textContent = text; $('#cfmDlg').showModal(); $('#cfmOk').onclick = async () => { $('#cfmDlg').close(); try { await ok(); } catch (e) { toast(e.message); } }; }
-function openAdd() { $('#addDlg').showModal(); $('#aName').focus(); }
-$('#addTop').onclick = openAdd;
+let editId = null;
+function openAdd(id, name, phone) {
+  editId = id ?? null;
+  $('#addTitle').textContent = editId ? 'Edit sales member' : 'Add sales member';
+  $('#addSubmit').textContent = editId ? 'Save changes' : 'Add member';
+  $('#aName').value = name ?? ''; $('#aPhone').value = phone ?? '';
+  $('#addDlg').showModal(); $('#aName').focus();
+}
+$('#addTop').onclick = () => openAdd();
 document.querySelectorAll('[data-close]').forEach((b) => (b.onclick = () => b.closest('dialog').close()));
 $('#addForm').onsubmit = async (e) => {
   e.preventDefault();
-  try { await api('/api/team', { name: $('#aName').value, phone: $('#aPhone').value }); $('#addDlg').close(); $('#addForm').reset(); toast('Member added'); route(); } catch (err) { toast(err.message); }
+  try {
+    const body = { name: $('#aName').value, phone: $('#aPhone').value };
+    if (editId) await api(`/api/team/${editId}`, body, 'PATCH'); else await api('/api/team', body);
+    $('#addDlg').close(); $('#addForm').reset(); toast(editId ? 'Member updated' : 'Member added'); editId = null; route();
+  } catch (err) { toast(err.message); }
 };
 
 /* ---------------- shell ---------------- */

@@ -125,6 +125,19 @@ adminRouter.post('/api/team', (req, res) => {
   res.status(201).json({ ok: true });
 });
 
+// Edit a member's name or number.
+adminRouter.patch('/api/team/:id', (req, res) => {
+  const agent = db.prepare('SELECT * FROM agents WHERE id=?').get(req.params.id);
+  if (!agent) return res.sendStatus(404);
+  const name = String(req.body.name ?? agent.name).trim();
+  const phone = normalizePhone(req.body.phone ?? agent.phone);
+  if (!name || phone.length < 10) return res.status(400).json({ error: 'A name and a valid phone number are required' });
+  const dup = db.prepare('SELECT name FROM agents WHERE phone=? AND id!=?').get(phone, agent.id);
+  if (dup) return res.status(409).json({ error: `This number is already added (${dup.name})` });
+  db.prepare('UPDATE agents SET name=?, phone=? WHERE id=?').run(name, phone, agent.id);
+  res.json({ ok: true });
+});
+
 // Remove a member entirely. Their past leads stay in the Leads list (unassigned).
 adminRouter.delete('/api/team/:id', async (req, res) => {
   const agent = db.prepare('SELECT * FROM agents WHERE id=?').get(req.params.id);
