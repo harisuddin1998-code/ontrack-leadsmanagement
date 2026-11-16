@@ -117,10 +117,22 @@ adminRouter.get('/api/team', (req, res) => {
 adminRouter.post('/api/team', (req, res) => {
   const name = String(req.body.name ?? '').trim();
   const phone = normalizePhone(req.body.phone ?? '');
-  if (!name || phone.length < 10) return res.status(400).json({ error: 'name aur sahi phone number chahiye' });
+  if (!name || phone.length < 10) return res.status(400).json({ error: 'A name and a valid phone number are required' });
+  const dup = db.prepare('SELECT name FROM agents WHERE phone=?').get(phone);
+  if (dup) return res.status(409).json({ error: `This number is already added (${dup.name})` });
   const token = crypto.randomBytes(16).toString('hex');
   db.prepare('INSERT INTO agents (name, phone, token) VALUES (?,?,?)').run(name, phone, token);
-  res.sendStatus(201);
+  res.status(201).json({ ok: true });
+});
+
+// Remove a member entirely. Their past leads stay in the Leads list (unassigned).
+adminRouter.delete('/api/team/:id', async (req, res) => {
+  const agent = db.prepare('SELECT * FROM agents WHERE id=?').get(req.params.id);
+  if (!agent) return res.sendStatus(404);
+  await disconnect(Number(req.params.id)).catch(() => {});
+  db.prepare('DELETE FROM agents WHERE id=?').run(agent.id);
+  logEvent('member_removed', `${agent.name} removed from the team`);
+  res.sendStatus(204);
 });
 
 // Pakistan is UTC+5; dashboard days are cut on local midnight.

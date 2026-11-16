@@ -69,7 +69,7 @@ const paintIcons = (root = document) => root.querySelectorAll('[data-i]').forEac
 const utc = (t) => new Date(String(t).replace(' ', 'T') + 'Z');
 const ago = (t) => { const s = (Date.now() - utc(t)) / 1000; if (s < 45) return 'just now'; if (s < 3600) return Math.round(s / 60) + 'm ago'; if (s < 86400) return Math.round(s / 3600) + 'h ago'; return Math.round(s / 86400) + 'd ago'; };
 const when = (t) => utc(t).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-const api = async (u, body) => { const r = await fetch(u, body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Request failed'); return r.status === 204 ? null : r.json(); };
+const api = async (u, body, method) => { const r = await fetch(u, body === undefined ? {} : { method: method || 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); const data = (r.headers.get('content-type') || '').includes('json') ? await r.json().catch(() => null) : null; if (!r.ok) throw new Error(data?.error || 'Request failed'); return data; };
 const toast = (m) => { const t = document.createElement('div'); t.className = 'toast'; t.textContent = m; $('#toasts').append(t); setTimeout(() => t.remove(), 3200); };
 const initials = (n) => String(n || '?').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
 const avatar = (id, name, sm) => `<span class="av ${sm ? 'sm' : ''} c${id % 5}">${esc(initials(name))}</span>`;
@@ -198,7 +198,8 @@ async function team() {
       <div class="acts">
         ${a.wa.state === 'disconnected' ? `<button class="btn sm primary" data-a="link" data-id="${a.id}" data-n="${esc(a.name)}"><span data-i="link"></span>Link WhatsApp</button>` : `<button class="btn sm danger" data-a="unlink" data-id="${a.id}" data-n="${esc(a.name)}">Disconnect</button>`}
         <button class="btn sm" data-a="pause" data-id="${a.id}" data-v="${a.active ? 0 : 1}">${a.active ? 'Pause leads' : 'Resume leads'}</button>
-        <button class="btn sm" data-a="copy" data-l="${esc(a.link)}"><span data-i="copy"></span>Member link</button></div></div>`).join('')}</div>`
+        <button class="btn sm" data-a="copy" data-l="${esc(a.link)}"><span data-i="copy"></span>Member link</button>
+        <button class="btn sm danger" data-a="remove" data-id="${a.id}" data-n="${esc(a.name)}">Remove</button></div></div>`).join('')}</div>`
     : `<div class="card"><div class="empty">${icon('team')}<b>Build your sales team</b>Add the people who will receive leads on WhatsApp.<br><br><button class="btn primary" onclick="openAdd()">Add first member</button></div></div>`;
   paintIcons($('#view'));
 }
@@ -209,6 +210,7 @@ $('#view').addEventListener('click', async (e) => {
     if (b.dataset.a === 'pause') { await api(`/api/team/${id}/active`, { active: b.dataset.v === '1' }); toast(b.dataset.v === '1' ? 'Leads resumed' : 'Leads paused'); team(); }
     if (b.dataset.a === 'link') showQr(id, b.dataset.n);
     if (b.dataset.a === 'unlink') confirmBox('Disconnect WhatsApp?', `${b.dataset.n} will be unlinked from this dashboard and will need to scan a new QR code to reconnect.`, async () => { await api(`/api/team/${id}/disconnect`, {}); toast('WhatsApp disconnected'); team(); });
+    if (b.dataset.a === 'remove') confirmBox('Remove this member?', `${b.dataset.n} will be removed from the team and unlinked from WhatsApp. Their past leads stay in the Leads list.`, async () => { await api(`/api/team/${id}`, {}, 'DELETE'); toast('Member removed'); team(); });
   } catch (err) { toast(err.message); }
 });
 
