@@ -50,8 +50,29 @@ publicRouter.get('/go', (req, res) => {
   const id = db.prepare('INSERT INTO clicks (agent_id, ref) VALUES (?,?)').run(agent.id, ref).lastInsertRowid;
   logEvent('click', `Ref #${id} routed to ${agent.name}`);
   const text = `Hello, I'd like details on the On Track GPS tracker. (Ref #${id})`;
-  res.redirect(302, `https://wa.me/${agent.phone}?text=${encodeURIComponent(text)}`);
+  res.set('Cache-Control', 'no-store').type('html').send(openWhatsAppPage(agent.phone, text, /android/i.test(ua)));
 });
+
+// Facebook/Instagram's in-app browser often stalls on a plain wa.me redirect, so open the app directly
+// and keep a big button plus the wa.me link as fallbacks.
+function openWhatsAppPage(phone, text, android) {
+  const q = `phone=${phone}&text=${encodeURIComponent(text)}`;
+  const web = `https://api.whatsapp.com/send?${q}`;
+  const app = android
+    ? `intent://send/?${q}#Intent;scheme=whatsapp;S.browser_fallback_url=${encodeURIComponent(web)};end`
+    : `whatsapp://send?${q}`;
+  const esc = (s) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+  return `<!doctype html><html lang="ur" dir="rtl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>On Track GPS – WhatsApp</title>
+<style>body{margin:0;font-family:system-ui,sans-serif;background:#f0f2f5;color:#111;display:flex;min-height:100vh;align-items:center;justify-content:center;text-align:center}
+.c{padding:24px 16px;max-width:380px;width:100%}a.b{display:block;background:#25d366;color:#fff;font-size:22px;font-weight:700;padding:18px;border-radius:14px;text-decoration:none;margin:18px 0}
+a.w{color:#0a7d3b}small{color:#555}</style></head>
+<body><div class="c"><h2>On Track GPS</h2><p>واٹس ایپ کھل رہا ہے…</p>
+<a class="b" href="${esc(app)}">📲 واٹس ایپ پر بات کریں</a>
+<small>اگر واٹس ایپ خود نہ کھلے تو اوپر والا ہرا بٹن دبائیں</small>
+<p><a class="w" href="${esc(web)}">یہاں کلک کریں</a> · <span dir="ltr">+${phone}</span></p></div>
+<script>setTimeout(function(){location.href=${JSON.stringify(app)}},100)</script></body></html>`;
+}
 
 function pickAgentIfHuman(ua) {
   if (BOT_UA.test(ua)) return 'bot'; // link-preview crawlers must not use up a turn
